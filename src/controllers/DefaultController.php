@@ -143,7 +143,7 @@ class DefaultController extends Controller
             $this->loadData($tag);
         }
 
-        return $this->render('@api/components/Debug/views/default/index', [
+        return $this->render('index', [
             'panels' => $this->module->panels,
             'dataProvider' => $dataProvider,
             'searchModel' => $searchModel,
@@ -178,7 +178,7 @@ class DefaultController extends Controller
                 Yii::$app->errorHandler->handleException($activePanel->getError());
             }
 
-            return $this->render('@api/components/Debug/views/default/view-mongo', [
+            return $this->render('view-mongo', [
                 'tag' => $tag,
                 'summary' => $this->summary,
                 'manifest' => [],
@@ -351,7 +351,7 @@ class DefaultController extends Controller
             ]);
         }
 
-        $html = $this->renderPartial('@api/components/Debug/views/default/index-mongo-row', [
+        $html = $this->renderPartial('index-mongo-row', [
             'rows' => $rows,
             'searchModel' => new \yii\debug\models\search\Debug(),
             'panels' => $this->module->panels,

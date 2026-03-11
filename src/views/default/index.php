@@ -4,6 +4,7 @@ use Magput\Debug\panels\CustomDbPanel;
 use Magput\Debug\helpers\JsonHelper;
 use yii\data\ArrayDataProvider;
 use yii\debug\panels\AssetPanel;
+use yii\debug\panels\DbPanel;
 use yii\debug\panels\EventPanel;
 use yii\debug\panels\MailPanel;
 use yii\debug\panels\ProfilingPanel;
@@ -38,7 +39,7 @@ $this->title = 'Yii Debugger';
                             'memory' => sprintf('%.3f MB', ($panel->data['memory'] ?? 0) / 1048576),
                             'time' => number_format(($panel->data['time'] ?? 0) * 1000) . ' ms',
                         ];
-                    } elseif ($panel instanceof CustomDbPanel) {
+                    } elseif ($panel instanceof DbPanel || $panel instanceof CustomDbPanel) {
                         $timings = $panel->calculateTimings();
                         $queryCount = count($timings);
                         $queryTime = number_format($panel->getTotalQueryTime($timings) * 1000) . ' ms';
@@ -65,7 +66,7 @@ $this->title = 'Yii Debugger';
                         continue;
                     }
             ?>
-                <?= $this->renderFile(Yii::getAlias('@api/components/Debug/views/default/panels/' . $panelViewPath . '/summary.php'), [
+                <?= $this->render('panels/' . $panelViewPath . '/summary.php', [
                     'panel' => $panel,
                     'data' => $panel->data,
                     ...$extraParams
@@ -153,7 +154,7 @@ $this->title = 'Yii Debugger';
                         'attribute' => 'sqlCount',
                         'label' => 'Query Count',
                         'value' => function ($data) {
-                            /* @var $dbPanel \yii\debug\panels\DbPanel */
+                            /* @var $dbPanel DbPanel */
                             $dbPanel = $this->context->module->panels['db'];
 
                             $title = "Executed {$data['sqlCount']} database queries.";
