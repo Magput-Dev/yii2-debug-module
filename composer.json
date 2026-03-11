@@ -1,5 +1,5 @@
 {
-    "name": "magput/yii2-debug-module",
+    "name": "magput-dev/yii2-debug-module",
     "description": "Custom Yii2 Debug Module with MongoDB support",
     "type": "yii2-extension",
     "keywords": ["yii2", "debug", "mongodb"],
