@@ -44,7 +44,7 @@ $this->title = 'Yii Debugger';
                         'memory' => sprintf('%.3f MB', ($panel->data['memory'] ?? 0) / 1048576),
                         'time' => number_format(($panel->data['time'] ?? 0) * 1000) . ' ms',
                     ];
-                } elseif ($panel instanceof CustomDbPanel) {
+                } elseif ($panel instanceof DbPanel || $panel instanceof CustomDbPanel) {
                     $timings = $panel->calculateTimings();
                     $queryCount = count($timings);
                     $queryTime = number_format($panel->getTotalQueryTime($timings) * 1000) . ' ms';
@@ -71,7 +71,7 @@ $this->title = 'Yii Debugger';
                     continue;
                 }
                 ?>
-                <?= $this->renderFile(Yii::getAlias('@api/components/Debug/views/default/panels/' . $panelViewPath . '/summary.php'), [
+                <?= $this->render('panels/' . $panelViewPath . '/summary.php', [
                     'panel' => $panel,
                     'data' => $panel->data,
                     ...$extraParams

@@ -117,7 +117,7 @@ class DefaultController extends Controller
                 ],
             ]);
 
-            return $this->render('@api/components/Debug/views/default/index-mongo', [
+            return $this->render('index-mongo', [
                 'panels' => $this->module->panels,
                 'dataProvider' => $dataProvider,
                 'searchModel' => $searchModel,
