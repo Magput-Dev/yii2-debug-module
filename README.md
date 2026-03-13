@@ -14,7 +14,10 @@ RUN pecl install mongodb \
 && docker-php-ext-enable mongodb
 ```
 
-2) добавить в composer.json
+2) убедиться, что в mongo созданы collections для сервиса, например, "auth_api_debug_data", "auth_api_query_log"
+
+### Установка пакета 
+добавить в composer.json
 ```json
 "repositories": [
    {
@@ -24,7 +27,6 @@ RUN pecl install mongodb \
 ]
    ```
 
-### Установка пакета 
 php >= 8.1
 ```bash
 composer require magput-dev/yii2-debug-module:dev-8-1
