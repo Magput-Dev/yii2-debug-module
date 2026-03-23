@@ -1,0 +1,20 @@
+{
+    "name": "magput-dev/yii2-debug-module",
+    "description": "Custom Yii2 Debug Module with MongoDB support",
+    "type": "yii2-extension",
+    "keywords": ["yii2", "debug", "mongodb"],
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.1",
+        "yiisoft/yii2": "~2.0.13",
+        "yiisoft/yii2-debug": "~2.1.0",
+        "yiisoft/yii2-mongodb": "^3.0",
+        "ramsey/uuid": "^4.0",
+        "symfony/serializer-pack": "1.3.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Magput\\Debug\\": "src/"
+        }
+    }
+}
