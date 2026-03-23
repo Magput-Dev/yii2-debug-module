@@ -216,7 +216,12 @@ class DefaultController extends Controller
 
     public function actionToolbar($tag)
     {
-        $this->loadData($tag, 5);
+        $dataStorage = $this->module->getDataStorage();
+        if ($dataStorage instanceof MongoDataStorage) {
+            $this->loadDataDirect($tag, 5);
+        } else {
+            $this->loadData($tag, 5);
+        }
 
         return $this->renderPartial('@vendor/yiisoft/yii2-debug/src/views/default/toolbar', [
             'tag' => $tag,
