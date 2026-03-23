@@ -46,6 +46,14 @@ class DebugModule extends Module implements BootstrapInterface
      */
     public $gatewayPath = '';
     /**
+     * @var array Список Action-классов исключений, для которых debug модуль будет отключен
+     */
+    public $exceptActions = [];
+    /**
+     * @var array Список Controller-классов исключений, для которых debug модуль будет отключен
+     */
+    public $exceptControllers = [];
+    /**
      * @var array the list of IPs that are allowed to access this module.
      * Each array element represents a single IP filter which can be either:
      * - an IP address (e.g. 1.2.3.4),
