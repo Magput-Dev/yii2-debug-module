@@ -2,6 +2,7 @@
 
 namespace Magput\Debug;
 
+use Magput\Debug\data\MongoDataStorage;
 use Magput\Debug\helpers\JsonHelper;
 use Exception;
 use Ramsey\Uuid\Uuid;
@@ -17,6 +18,9 @@ use yii\log\Target;
  */
 class LogTarget extends Target
 {
+    private const MEMORY_GUARD_RATIO = 0.70;
+    private const MEMORY_ENCODE_RESERVE_BYTES = 16777216; // 16MB
+
     /** @var DebugModule */
     public $module;
     /** @var string */
@@ -42,26 +46,134 @@ class LogTarget extends Target
     public function export()
     {
         $summary = $this->collectSummary();
+        $dataStorage = $this->module->getDataStorage();
+
+        if ($dataStorage instanceof MongoDataStorage && $this->isMemoryPressureHigh()) {
+            $this->ensureSummaryPerformanceMetrics($summary);
+            $dataStorage->setIndexData($this->tag, $summary);
+            Yii::warning('Debug payload skipped due to memory pressure; index only saved.', __METHOD__);
+            return;
+        }
 
         $data = [];
         $exceptions = [];
 
         foreach ($this->module->panels as $id => $panel) {
+            if ($dataStorage instanceof MongoDataStorage && $this->isMemoryPressureHigh()) {
+                $summary['debugPartial'] = 1;
+                $summary['debugPartialReason'] = 'memory-pressure';
+                $this->ensureSummaryPerformanceMetrics($summary);
+                $dataStorage->setIndexData($this->tag, $summary);
+                Yii::warning('Debug payload partially skipped due to memory pressure; index only saved.', __METHOD__);
+                return;
+            }
+
             try {
                 $panelData = $panel->save();
                 if ($id === 'profiling') {
                     $summary['peakMemory'] = $panelData['memory'];
                     $summary['processingTime'] = $panelData['time'];
                 }
+                if ($dataStorage instanceof MongoDataStorage && $this->isMemoryPressureHigh()) {
+                    $summary['debugPartial'] = 1;
+                    $summary['debugPartialReason'] = 'memory-pressure-before-encode';
+                    $this->ensureSummaryPerformanceMetrics($summary);
+                    $dataStorage->setIndexData($this->tag, $summary);
+                    Yii::warning('Debug payload skipped before encode due to memory pressure; index only saved.', __METHOD__);
+                    return;
+                }
+                if ($dataStorage instanceof MongoDataStorage && !$this->hasMemoryHeadroom(self::MEMORY_ENCODE_RESERVE_BYTES)) {
+                    $summary['debugPartial'] = 1;
+                    $summary['debugPartialReason'] = 'low-memory-headroom-before-encode';
+                    $this->ensureSummaryPerformanceMetrics($summary);
+                    $dataStorage->setIndexData($this->tag, $summary);
+                    Yii::warning('Debug payload skipped because there is not enough free memory for encode; index only saved.', __METHOD__);
+                    return;
+                }
                 $data[$id] = json_encode($panelData, JSON_UNESCAPED_UNICODE);
+                unset($panelData);
+                if (function_exists('gc_collect_cycles')) {
+                    gc_collect_cycles();
+                }
             } catch (Exception $exception) {
                 $exceptions[$id] = new FlattenException($exception);
             }
         }
+        $this->ensureSummaryPerformanceMetrics($summary);
         $data['summary'] = $summary;
         $data['exceptions'] = $exceptions;
 
         $this->module->getDataStorage()->setData($this->tag, $data);
+    }
+
+    /**
+     * @return bool
+     */
+    private function isMemoryPressureHigh()
+    {
+        $limitBytes = $this->getMemoryLimitBytes();
+        if ($limitBytes <= 0) {
+            return false;
+        }
+
+        return memory_get_usage(true) >= (int)($limitBytes * self::MEMORY_GUARD_RATIO);
+    }
+
+    /**
+     * @param int $reserveBytes
+     * @return bool
+     */
+    private function hasMemoryHeadroom($reserveBytes)
+    {
+        $limitBytes = $this->getMemoryLimitBytes();
+        if ($limitBytes <= 0) {
+            return true;
+        }
+
+        return ($limitBytes - memory_get_usage(true)) > $reserveBytes;
+    }
+
+    /**
+     * Fills summary metrics when profiling panel was not fully processed.
+     *
+     * @param array $summary
+     */
+    private function ensureSummaryPerformanceMetrics(array &$summary)
+    {
+        if (!isset($summary['peakMemory']) || $summary['peakMemory'] === null) {
+            $summary['peakMemory'] = memory_get_peak_usage(true);
+        }
+
+        if (!isset($summary['processingTime']) || $summary['processingTime'] === null) {
+            $requestStart = isset($_SERVER['REQUEST_TIME_FLOAT']) ? (float)$_SERVER['REQUEST_TIME_FLOAT'] : microtime(true);
+            $summary['processingTime'] = max(0, microtime(true) - $requestStart);
+        }
+    }
+
+    /**
+     * @return int
+     */
+    private function getMemoryLimitBytes()
+    {
+        $memoryLimit = ini_get('memory_limit');
+        if ($memoryLimit === false || $memoryLimit === '' || $memoryLimit === '-1') {
+            return -1;
+        }
+
+        $memoryLimit = trim($memoryLimit);
+        $unit = strtolower(substr($memoryLimit, -1));
+        $value = (int)$memoryLimit;
+
+        switch ($unit) {
+            case 'g':
+                return $value * 1024 * 1024 * 1024;
+            case 'm':
+                return $value * 1024 * 1024;
+            case 'k':
+                return $value * 1024;
+            default:
+                return (int)$memoryLimit;
+        }
     }
 
     /**

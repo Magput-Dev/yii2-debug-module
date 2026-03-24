@@ -121,6 +121,23 @@ class MongoDataStorage extends Component implements DataStorage
         $this->updateIndex($tag, $data['summary'] ? $data['summary'] : []);
     }
 
+    /**
+     * Writes only index document without full payload.
+     *
+     * @param string $tag
+     * @param array $summary
+     * @return void
+     * @throws \yii\mongodb\Exception
+     */
+    public function setIndexData($tag, array $summary)
+    {
+        if (!isset($this->indexCollection)) {
+            return;
+        }
+
+        $this->updateIndex($tag, $summary);
+    }
+
     public function getDataManifest($forceReload = false)
     {
         return [];
