@@ -315,10 +315,10 @@ class DebugModule extends Module implements BootstrapInterface
             $app->on(Application::EVENT_BEFORE_REQUEST, function () use ($app) {
                 $app->getResponse()->on(Response::EVENT_AFTER_PREPARE, [$this, 'setDebugHeaders']);
             });
+            $app->on(Application::EVENT_BEFORE_ACTION, function () use ($app) {
+                $app->getView()->on(View::EVENT_END_BODY, [$this, 'renderToolbar']);
+            });
         }
-        $app->on(Application::EVENT_BEFORE_ACTION, function () use ($app) {
-            $app->getView()->on(View::EVENT_END_BODY, [$this, 'renderToolbar']);
-        });
 
         $app->getUrlManager()->addRules([
             [
@@ -356,8 +356,10 @@ class DebugModule extends Module implements BootstrapInterface
         }
 
         // do not display debug toolbar when in debug view mode
-        Yii::$app->getView()->off(View::EVENT_END_BODY, [$this, 'renderToolbar']);
-        Yii::$app->getResponse()->off(Response::EVENT_AFTER_PREPARE, [$this, 'setDebugHeaders']);
+        if (YII_ENV_DEV) {
+            Yii::$app->getView()->off(View::EVENT_END_BODY, [$this, 'renderToolbar']);
+            Yii::$app->getResponse()->off(Response::EVENT_AFTER_PREPARE, [$this, 'setDebugHeaders']);
+        }
 
         if ($this->checkAccess($action)) {
             $this->resetGlobalSettings();
