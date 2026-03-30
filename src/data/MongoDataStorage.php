@@ -105,20 +105,29 @@ class MongoDataStorage extends Component implements DataStorage
 
         $time = (int)(isset($data['summary']['time']) ? $data['summary']['time'] : time());
 
-        $this->dataCollection->update(
-            ['tag' => $tag],
-            [
-                '$set' => [
-                    'tag' => $tag,
-                    'logData' => $data,
-                    'date' => new UTCDateTime($time * 1000),
-                    'time' => $time,
-                ],
-            ],
-            ['upsert' => true]
-        );
+        $log = [
+            'tag' => $tag,
+            'logData' => $data,
+            'date' => new UTCDateTime($time * 1000),
+            'time' => $time,
+        ];
 
-        $this->updateIndex($tag, $data['summary'] ? $data['summary'] : []);
+        /**
+         * $tag генерируется как uuid на каждый запрос, поэтому логичнее делать insert,
+         * а не update(..., upsert=true): upsert требует проверки наличия документа по `tag`.
+         */
+        try {
+            $this->dataCollection->insert($log);
+        } catch (Exception $e) {
+            /** На случай коллизии/уникального индекса (редко) откатываемся на upsert */
+            $this->dataCollection->update(
+                ['tag' => $tag],
+                ['$set' => $log],
+                ['upsert' => true]
+            );
+        }
+
+        $this->updateIndex($tag, $data['summary'] ?? []);
     }
 
     /**
@@ -164,7 +173,7 @@ class MongoDataStorage extends Component implements DataStorage
             'method' => isset($summary['method']) ? $summary['method'] : null,
             'peakMemory' => isset($summary['peakMemory']) ? $summary['peakMemory'] : null,
             'processingTime' => isset($summary['processingTime']) ? $summary['processingTime'] : null,
-            'requestUrl' => $summary['url'],
+            'requestUrl' => $summary['url'] ?? null,
             'statusCode' => isset($summary['statusCode']) ? $summary['statusCode'] : null,
             'summary' => array_diff_key(
                 $summary,
@@ -175,11 +184,20 @@ class MongoDataStorage extends Component implements DataStorage
             'userId' => isset($summary['userId']) ? $summary['userId'] : null,
         ];
 
-        $this->indexCollection->update(
-            ['tag' => $tag],
-            ['$set' => $newData, ],
-            ['upsert' => true]
-        );
+        /** 
+         * $tag генерируется как uuid на каждый запрос, поэтому логичнее делать insert,
+         * а не update(..., upsert=true): upsert требует проверки наличия документа по `tag`.
+         */
+        try {
+            $this->indexCollection->insert($newData);
+        } catch (Exception $e) {
+            /** На случай коллизии/уникального индекса откатываемся на upsert */
+            $this->indexCollection->update(
+                ['tag' => $tag],
+                ['$set' => $newData],
+                ['upsert' => true]
+            );
+        }
     }
 
     public function findIndexPage(array $filters, $limit = 50, $cursor = null)
@@ -295,7 +313,7 @@ class MongoDataStorage extends Component implements DataStorage
             ];
         }
 
-        // time range
+        /** time range */
         $range = [];
         if (!empty($filters['timeFrom'])) {
             $range['$gte'] = (int)$filters['timeFrom'];
@@ -307,7 +325,7 @@ class MongoDataStorage extends Component implements DataStorage
             $clauses[] = ['time' => $range];
         }
 
-        // Критично: никакого ['$and' => []]
+        /** Критично: никакого ['$and' => []] */
         if (count($clauses) === 0) {
             return [];
         }
