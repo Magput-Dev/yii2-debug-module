@@ -272,8 +272,9 @@ $this->title = 'Yii Debugger';
             const params = new URLSearchParams(window.location.search);
 
             // cursor
-            params.set('cursorTime', String(cursor.time));
-            params.set('cursorTag', String(cursor.tag));
+            if (cursor && cursor.id) {
+                params.set('cursorId', String(cursor.id));
+            }
             params.set('limit', '50');
 
             // endpoint

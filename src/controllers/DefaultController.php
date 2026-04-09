@@ -327,10 +327,9 @@ class DefaultController extends Controller
         $limit = max(1, min(200, $limit));
 
         $cursor = null;
-        $cursorTime = Yii::$app->request->get('cursorTime');
-        $cursorTag  = Yii::$app->request->get('cursorTag');
-        if ($cursorTime !== null && $cursorTag !== null && $cursorTime !== '' && $cursorTag !== '') {
-            $cursor = ['time' => (int)$cursorTime, 'tag' => (string)$cursorTag];
+        $cursorId = Yii::$app->request->get('cursorId');
+        if ($cursorId !== null && $cursorId !== '') {
+            $cursor = ['id' => (string)$cursorId];
         }
 
         $page = $dataStorage->findIndexPage($filters, $limit, $cursor);

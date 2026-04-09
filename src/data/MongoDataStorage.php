@@ -7,6 +7,7 @@ namespace Magput\Debug\data;
 use Magput\Debug\DebugModule;
 use Magput\Debug\helpers\JsonHelper;
 use Exception;
+use MongoDB\BSON\ObjectId;
 use MongoDB\BSON\UTCDateTime;
 use yii\base\Component;
 use yii\di\Instance;
@@ -184,7 +185,7 @@ class MongoDataStorage extends Component implements DataStorage
             'userId' => isset($summary['userId']) ? $summary['userId'] : null,
         ];
 
-        /** 
+        /**
          * $tag генерируется как uuid на каждый запрос, поэтому логичнее делать insert,
          * а не update(..., upsert=true): upsert требует проверки наличия документа по `tag`.
          */
@@ -210,18 +211,12 @@ class MongoDataStorage extends Component implements DataStorage
         $baseQuery = $this->buildIndexQuery($filters); // теперь безопаснее
 
         $cursorQuery = null;
-        if ($cursor && isset($cursor['time'], $cursor['tag'])) {
-            $cursorQuery = [
-                '$or' => [
-                    ['time' => ['$lt' => (int)$cursor['time']]],
-                    [
-                        '$and' => [
-                            ['time' => (int)$cursor['time']],
-                            ['tag'  => ['$lt' => (string)$cursor['tag']]],
-                        ],
-                    ],
-                ],
-            ];
+        if ($cursor && isset($cursor['id']) && $cursor['id'] !== '') {
+            try {
+                $cursorQuery = ['_id' => ['$lt' => new ObjectId((string)$cursor['id'])]];
+            } catch (Exception $e) {
+                $cursorQuery = null;
+            }
         }
 
         if (!empty($baseQuery) && $cursorQuery !== null) {
@@ -249,7 +244,7 @@ class MongoDataStorage extends Component implements DataStorage
                 'userId' => 1,
             ],
             [
-                'sort' => ['time' => -1, 'tag' => -1],
+                'sort' => ['_id' => -1],
                 'limit' => $limit,
             ]
         );
@@ -262,7 +257,10 @@ class MongoDataStorage extends Component implements DataStorage
                 continue;
             }
             $items[] = $doc;
-            $last = ['time' => (int)(isset($doc['time']) ? $doc['time'] : 0), 'tag' => $tag];
+            $lastId = isset($doc['_id']) ? (string)$doc['_id'] : '';
+            if ($lastId !== '') {
+                $last = ['id' => $lastId];
+            }
         }
 
         return [
@@ -275,24 +273,28 @@ class MongoDataStorage extends Component implements DataStorage
     {
         $clauses = [];
 
+        if (isset($filters['tag']) && trim((string)$filters['tag']) !== '') {
+            $clauses[] = ['tag' => trim((string)$filters['tag'])];
+        }
+
         if (!empty($filters['ip'])) {
             $clauses[] = ['ip' => (string)$filters['ip']];
         }
 
-        if (!empty($filters['method'])) {
-            $clauses[] = ['method' => (string)$filters['method']];
+        if (isset($filters['method']) && trim((string)$filters['method']) !== '') {
+            $clauses[] = ['method' => mb_strtoupper(trim((string)$filters['method']))];
         }
 
-        if (!empty($filters['statusCode'])) {
-            $clauses[] = ['statusCode' => (string)$filters['statusCode']];
+        if (isset($filters['statusCode']) && $filters['statusCode'] !== '') {
+            $clauses[] = ['statusCode' => (int)$filters['statusCode']];
         }
 
         if (!empty($filters['postData'])) {
             $clauses[] = [
                 'summary.postData' => [
-                '$regex' => (string)$filters['postData'],
-                '$options' => 'i',
-            ]];
+                    '$regex' => (string)$filters['postData'],
+                    '$options' => 'i',
+                ]];
         }
 
         if (!empty($filters['url'])) {
