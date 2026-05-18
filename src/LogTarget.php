@@ -239,9 +239,15 @@ class LogTarget extends Target
         $response = Yii::$app->getResponse();
 
         if ($request instanceof yii\web\Request) {
-            $postData = !empty($request->getRawBody())
-                ? JsonHelper::decode($request->getRawBody())
-                : (!empty($_POST) ? $_POST : null);
+            $bodyParams = $request->getBodyParams();
+            if (!empty($bodyParams)) {
+                $postData = $bodyParams;
+            } elseif (!empty($_POST)) {
+                $postData = $_POST;
+            } else {
+                $rawBody = $request->getRawBody();
+                $postData = $rawBody !== '' ? JsonHelper::decode($rawBody) : null;
+            }
         } else {
             $postData = null;
         }
