@@ -346,13 +346,14 @@ class DefaultController extends Controller
 
             $rows[] = array_merge($summary, [
                 'tag' => $tag,
-                'time' => isset($doc['time']) ? $doc['time'] : null,
-                'ip' => isset($doc['ip']) ? $doc['ip'] : '',
-                'method' => isset($doc['method']) ? $doc['method'] : '',
-                'statusCode' => isset($doc['statusCode']) ? $doc['statusCode'] : null,
-                'url' => isset($doc['requestUrl']) ? $doc['requestUrl'] : (isset($summary['url']) ? $summary['url'] : ''), // под вашу колонку url
-                'processingTime' => isset($doc['processingTime']) ? $doc['processingTime'] : (isset($summary['processingTime']) ? $summary['processingTime'] : null),
-                'peakMemory' => isset($doc['peakMemory']) ? $doc['peakMemory'] : (isset($summary['peakMemory']) ? $summary['peakMemory'] : null),
+                'time' => $doc['time'] ?? null,
+                'ip' => $doc['ip'] ?? '',
+                'method' => $doc['method'] ?? '',
+                'statusCode' => $doc['statusCode'] ?? null,
+                'url' => $doc['requestUrl'] ?? ($summary['url'] ?? ''),
+                'processingTime' => $doc['processingTime'] ?? ($summary['processingTime'] ?? null),
+                'peakMemory' => $doc['peakMemory'] ?? ($summary['peakMemory'] ?? null),
+                'userId' => $doc['userId'] ?? ($summary['userId'] ?? null),
             ]);
         }
 

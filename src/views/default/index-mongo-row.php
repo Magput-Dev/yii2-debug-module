@@ -1,6 +1,6 @@
 <?php
 
-use Magput\Debug\helpers\JsonHelper;
+use Magput\Debug\helpers\PostDataHelper;
 use yii\helpers\Html;
 use yii\helpers\Url;
 
@@ -28,14 +28,7 @@ $hasDbPanel = isset($panels['db']);
         $statusCodeClass = 'badge-danger';
     }
 
-    $postContent = '<span class="not-set">(не задано)</span>';
-    $postData = $data['postData'] ?? null;
-    if (is_array($postData)) {
-        $postData = JsonHelper::encode($postData);
-    }
-    if ($postData && $postData !== 'null') {
-        $postContent = '<div class="json-block">' . Html::encode($postData) . '</div>';
-    }
+    $postContent = PostDataHelper::renderPreviewBlock($data['postData'] ?? null);
 ?>
     <tr class="<?= Html::encode($rowClass) ?>">
         <td class="serial-column"></td>

@@ -296,7 +296,7 @@ class LogTarget extends Target
             'statusCode' => $response instanceof yii\console\Response ? $response->exitStatus : $response->statusCode,
             'sqlCount' => $this->getSqlTotalCount(),
             'getParams' => $request instanceof yii\console\Request ? $request->getParams() : $request->getQueryParams(),
-            'postData' => JsonHelper::encode($postData),
+            'postData' => JsonHelper::encode($postData, JSON_UNESCAPED_UNICODE),
             'responseData' => $response instanceof yii\console\Response
                 ? $response->exitStatus
                 : (!empty($response->stream) ? 'filestream' : $response->content),
