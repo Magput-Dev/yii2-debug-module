@@ -46,6 +46,14 @@ class DebugModule extends Module implements BootstrapInterface
      */
     public $gatewayPath = '';
     /**
+     * @var array Список Action-классов исключений, для которых debug модуль будет отключен
+     */
+    public array $exceptActions = [];
+    /**
+     * @var array Список Controller-классов исключений, для которых debug модуль будет отключен
+     */
+    public array $exceptControllers = [];
+    /**
      * @var array the list of IPs that are allowed to access this module.
      * Each array element represents a single IP filter which can be either:
      * - an IP address (e.g. 1.2.3.4),
@@ -307,10 +315,10 @@ class DebugModule extends Module implements BootstrapInterface
             $app->on(Application::EVENT_BEFORE_REQUEST, function () use ($app) {
                 $app->getResponse()->on(Response::EVENT_AFTER_PREPARE, [$this, 'setDebugHeaders']);
             });
+            $app->on(Application::EVENT_BEFORE_ACTION, function () use ($app) {
+                $app->getView()->on(View::EVENT_END_BODY, [$this, 'renderToolbar']);
+            });
         }
-        $app->on(Application::EVENT_BEFORE_ACTION, function () use ($app) {
-            $app->getView()->on(View::EVENT_END_BODY, [$this, 'renderToolbar']);
-        });
 
         $app->getUrlManager()->addRules([
             [
@@ -348,8 +356,10 @@ class DebugModule extends Module implements BootstrapInterface
         }
 
         // do not display debug toolbar when in debug view mode
-        Yii::$app->getView()->off(View::EVENT_END_BODY, [$this, 'renderToolbar']);
-        Yii::$app->getResponse()->off(Response::EVENT_AFTER_PREPARE, [$this, 'setDebugHeaders']);
+        if (YII_ENV_DEV) {
+            Yii::$app->getView()->off(View::EVENT_END_BODY, [$this, 'renderToolbar']);
+            Yii::$app->getResponse()->off(Response::EVENT_AFTER_PREPARE, [$this, 'setDebugHeaders']);
+        }
 
         if ($this->checkAccess($action)) {
             $this->resetGlobalSettings();

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Magput\Debug\data;
 
 use Magput\Debug\DebugModule;
-use Magput\Debug\helpers\JsonHelper;
 use Exception;
+use MongoDB\BSON\ObjectId;
 use MongoDB\BSON\UTCDateTime;
 use yii\base\Component;
 use yii\di\Instance;
@@ -59,8 +59,6 @@ class MongoDataStorage extends Component implements DataStorage
 
     /**
      * @param DebugModule $module
-     *
-     * @return void
      */
     public function setModule($module): void
     {
@@ -69,8 +67,6 @@ class MongoDataStorage extends Component implements DataStorage
 
     /**
      * @param string $tag
-     *
-     * @return array
      */
     public function getData($tag): array
     {
@@ -94,7 +90,6 @@ class MongoDataStorage extends Component implements DataStorage
      * @param string $tag
      * @param array $data
      *
-     * @return void
      * @throws \yii\mongodb\Exception
      */
     public function setData($tag, $data): void
@@ -105,20 +100,46 @@ class MongoDataStorage extends Component implements DataStorage
 
         $time = (int)($data['summary']['time'] ?? time());
 
-        $this->dataCollection->update(
-            ['tag' => $tag],
-            [
-                '$set' => [
-                    'tag' => $tag,
-                    'logData' => $data,
-                    'date' => new UTCDateTime($time * 1000),
-                    'time' => $time,
-                ],
-            ],
-            ['upsert' => true],
-        );
+        $log = [
+            'tag' => $tag,
+            'logData' => $data,
+            'date' => new UTCDateTime($time * 1000),
+            'time' => $time,
+        ];
 
-        $this->updateIndex($tag, $data['summary'] ?: []);
+        /**
+         * $tag генерируется как uuid на каждый запрос, поэтому логичнее делать insert,
+         * а не update(..., upsert=true): upsert требует проверки наличия документа по `tag`.
+         */
+        try {
+            $this->dataCollection->insert($log);
+        } catch (Exception $e) {
+            /** На случай коллизии/уникального индекса (редко) откатываемся на upsert */
+            $this->dataCollection->update(
+                ['tag' => $tag],
+                ['$set' => $log],
+                ['upsert' => true],
+            );
+        }
+
+        $this->updateIndex($tag, $data['summary'] ?? []);
+    }
+
+    /**
+     * Writes only index document without full payload.
+     *
+     * @param string $tag
+     * @param array $summary
+     *
+     * @throws \yii\mongodb\Exception
+     */
+    public function setIndexData(string $tag, array $summary): void
+    {
+        if (!isset($this->indexCollection)) {
+            return;
+        }
+
+        $this->updateIndex($tag, $summary);
     }
 
     public function getDataManifest($forceReload = false): array
@@ -130,7 +151,6 @@ class MongoDataStorage extends Component implements DataStorage
      * @param string $tag
      * @param array $summary
      *
-     * @return void
      * @throws \yii\mongodb\Exception
      */
     private function updateIndex(string $tag, array $summary): void
@@ -147,7 +167,7 @@ class MongoDataStorage extends Component implements DataStorage
             'method' => $summary['method'] ?? null,
             'peakMemory' => $summary['peakMemory'] ?? null,
             'processingTime' => $summary['processingTime'] ?? null,
-            'requestUrl' => $summary['url'],
+            'requestUrl' => $summary['url'] ?? null,
             'statusCode' => $summary['statusCode'] ?? null,
             'summary' => array_diff_key(
                 $summary,
@@ -158,11 +178,20 @@ class MongoDataStorage extends Component implements DataStorage
             'userId' => $summary['userId'] ?? null,
         ];
 
-        $this->indexCollection->update(
-            ['tag' => $tag],
-            ['$set' => $newData, ],
-            ['upsert' => true],
-        );
+        /**
+         * $tag генерируется как uuid на каждый запрос, поэтому логичнее делать insert,
+         * а не update(..., upsert=true): upsert требует проверки наличия документа по `tag`.
+         */
+        try {
+            $this->indexCollection->insert($newData);
+        } catch (Exception $e) {
+            /** На случай коллизии/уникального индекса откатываемся на upsert */
+            $this->indexCollection->update(
+                ['tag' => $tag],
+                ['$set' => $newData],
+                ['upsert' => true],
+            );
+        }
     }
 
     public function findIndexPage(array $filters, int $limit = 50, ?array $cursor = null): array
@@ -171,21 +200,15 @@ class MongoDataStorage extends Component implements DataStorage
             return ['items' => [], 'nextCursor' => null];
         }
 
-        $baseQuery = $this->buildIndexQuery($filters); // теперь безопаснее
+        $baseQuery = $this->buildIndexQuery($filters);
 
         $cursorQuery = null;
-        if ($cursor && isset($cursor['time'], $cursor['tag'])) {
-            $cursorQuery = [
-                '$or' => [
-                    ['time' => ['$lt' => (int)$cursor['time']]],
-                    [
-                        '$and' => [
-                            ['time' => (int)$cursor['time']],
-                            ['tag'  => ['$lt' => (string)$cursor['tag']]],
-                        ],
-                    ],
-                ],
-            ];
+        if ($cursor && isset($cursor['id']) && $cursor['id'] !== '') {
+            try {
+                $cursorQuery = ['_id' => ['$lt' => new ObjectId((string)$cursor['id'])]];
+            } catch (Exception $e) {
+                $cursorQuery = null;
+            }
         }
 
         if (!empty($baseQuery) && $cursorQuery !== null) {
@@ -213,7 +236,7 @@ class MongoDataStorage extends Component implements DataStorage
                 'userId' => 1,
             ],
             options: [
-                'sort' => ['time' => -1, 'tag' => -1],
+                'sort' => ['_id' => -1],
                 'limit' => $limit,
             ],
         );
@@ -226,7 +249,10 @@ class MongoDataStorage extends Component implements DataStorage
                 continue;
             }
             $items[] = $doc;
-            $last = ['time' => (int)($doc['time'] ?? 0), 'tag' => $tag];
+            $lastId = isset($doc['_id']) ? (string)$doc['_id'] : '';
+            if ($lastId !== '') {
+                $last = ['id' => $lastId];
+            }
         }
 
         return [
@@ -239,24 +265,29 @@ class MongoDataStorage extends Component implements DataStorage
     {
         $clauses = [];
 
+        if (isset($filters['tag']) && trim((string)$filters['tag']) !== '') {
+            $clauses[] = ['tag' => trim((string)$filters['tag'])];
+        }
+
         if (!empty($filters['ip'])) {
             $clauses[] = ['ip' => (string)$filters['ip']];
         }
 
-        if (!empty($filters['method'])) {
-            $clauses[] = ['method' => (string)$filters['method']];
+        if (isset($filters['method']) && trim((string)$filters['method']) !== '') {
+            $clauses[] = ['method' => mb_strtoupper(trim((string)$filters['method']))];
         }
 
-        if (!empty($filters['statusCode'])) {
-            $clauses[] = ['statusCode' => (string)$filters['statusCode']];
+        if (isset($filters['statusCode']) && $filters['statusCode'] !== '') {
+            $clauses[] = ['statusCode' => (int)$filters['statusCode']];
         }
 
         if (!empty($filters['postData'])) {
             $clauses[] = [
                 'summary.postData' => [
-                '$regex' => (string)$filters['postData'],
-                '$options' => 'i',
-            ]];
+                    '$regex' => (string)$filters['postData'],
+                    '$options' => 'i',
+                ],
+            ];
         }
 
         if (!empty($filters['url'])) {
@@ -277,7 +308,6 @@ class MongoDataStorage extends Component implements DataStorage
             ];
         }
 
-        // time range
         $range = [];
         if (!empty($filters['timeFrom'])) {
             $range['$gte'] = (int)$filters['timeFrom'];
@@ -289,7 +319,6 @@ class MongoDataStorage extends Component implements DataStorage
             $clauses[] = ['time' => $range];
         }
 
-        // Критично: никакого ['$and' => []]
         if (count($clauses) === 0) {
             return [];
         }

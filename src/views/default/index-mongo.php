@@ -1,7 +1,7 @@
 <?php
 
 use Magput\Debug\panels\CustomDbPanel;
-use Magput\Debug\helpers\JsonHelper;
+use Magput\Debug\helpers\PostDataHelper;
 use yii\data\ArrayDataProvider;
 use yii\debug\models\search\Debug;
 use yii\debug\Module;
@@ -74,7 +74,7 @@ $this->title = 'Yii Debugger';
                 <?= $this->render('panels/' . $panelViewPath . '/summary.php', [
                     'panel' => $panel,
                     'data' => $panel->data,
-                    ...$extraParams
+                    ...$extraParams,
                 ]) ?>
             <?php } ?>
         </div>
@@ -101,7 +101,10 @@ $this->title = 'Yii Debugger';
                 'filterModel' => $searchModel,
                 'filterUrl' => $this->context->module->gatewayPath . '/debug/default',
                 'options' => ['id' => 'debug-grid'],
-                'tableOptions' => ['class' => 'table table-striped table-bordered'],
+                'tableOptions' => [
+                    'class' => 'table table-striped table-bordered',
+                    'style' => 'word-break: break-all;',
+                ],
                 'pager' => false,
                 'summary' => false,
                 'rowOptions' => function ($model) use ($searchModel, $hasDbPanel) {
@@ -114,12 +117,18 @@ $this->title = 'Yii Debugger';
                 'columns' => array_filter([
                     [
                         'class' => SerialColumn::class,
+                        'headerOptions' => [
+                            'style' => 'width: 30px;',
+                        ],
                         'contentOptions' => [
                             'class' => 'serial-column',
                         ],
                     ],
                     [
                         'attribute' => 'tag',
+                        'headerOptions' => [
+                            'style' => 'width: 100px;',
+                        ],
                         'value' => function ($data) {
                             return Html::a($data['tag'], ['view', 'tag' => $data['tag']]);
                         },
@@ -127,6 +136,9 @@ $this->title = 'Yii Debugger';
                     ],
                     [
                         'attribute' => 'time',
+                        'headerOptions' => [
+                            'style' => 'width: 100px;',
+                        ],
                         'value' => function ($data) {
                             return '<span class="nowrap">' . Yii::$app->formatter->asDatetime($data['time'],
                                     'yyyy-MM-dd HH:mm:ss') . '</span>';
@@ -135,6 +147,9 @@ $this->title = 'Yii Debugger';
                     ],
                     [
                         'attribute' => 'processingTime',
+                        'headerOptions' => [
+                            'style' => 'width: 100px;',
+                        ],
                         'value' => function ($data) {
                             if (!isset($data['processingTime']) || $data['processingTime'] === '') {
                                 return '<span class="not-set">(not set)</span>';
@@ -145,6 +160,9 @@ $this->title = 'Yii Debugger';
                     ],
                     [
                         'attribute' => 'peakMemory',
+                        'headerOptions' => [
+                            'style' => 'width: 100px;',
+                        ],
                         'value' => function ($data) {
                             if (!isset($data['peakMemory']) || $data['peakMemory'] === '') {
                                 return '<span class="not-set">(not set)</span>';
@@ -153,10 +171,18 @@ $this->title = 'Yii Debugger';
                         },
                         'format' => 'html',
                     ],
-                    'ip',
+                    [
+                        'attribute' => 'ip',
+                        'headerOptions' => [
+                            'style' => 'width: 70px;',
+                        ],
+                    ],
                     $hasDbPanel ? [
                         'attribute' => 'sqlCount',
                         'label' => 'Query Count',
+                        'headerOptions' => [
+                            'style' => 'width: 100px;',
+                        ],
                         'value' => function ($data) {
                             /* @var $dbPanel DbPanel */
                             $dbPanel = $this->context->module->panels['db'];
@@ -184,6 +210,9 @@ $this->title = 'Yii Debugger';
                     ] : null,
                     [
                         'attribute' => 'method',
+                        'headerOptions' => [
+                            'style' => 'width: 70px;',
+                        ],
                         'filter' => [
                             'get' => 'GET',
                             'post' => 'POST',
@@ -195,28 +224,27 @@ $this->title = 'Yii Debugger';
                     ],
                     [
                         'attribute' => 'url',
+                        'headerOptions' => [
+                            'style' => 'width: 250px;',
+                        ],
                         'label' => 'URL/Command',
                     ],
                     [
                         'attribute' => 'postData',
+                        'headerOptions' => [
+                            'style' => 'width: 250px;',
+                        ],
                         'label' => 'Post Data',
                         'format' => 'raw',
                         'value' => function ($data) {
-                            $postData = $data['postData'] ?? null;
-
-                            if (!$postData || $postData === 'null') {
-                                return null;
-                            }
-
-                            if (is_array($postData)) {
-                                $postData = JsonHelper::encode($postData);
-                            }
-
-                            return '<div class="json-block">' . $postData . '</div>';
+                            return PostDataHelper::renderPreviewBlock($data['postData'] ?? null);
                         },
                     ],
                     [
                         'attribute' => 'statusCode',
+                        'headerOptions' => [
+                            'style' => 'width: 70px;',
+                        ],
                         'value' => function ($data) {
                             $statusCode = $data['statusCode'];
                             $method = $data['method'];
@@ -235,7 +263,12 @@ $this->title = 'Yii Debugger';
                         'format' => 'raw',
                         'label' => 'Status code'
                     ],
-                    'userId',
+                    [
+                        'attribute' => 'userId',
+                        'headerOptions' => [
+                            'style' => 'width: 70px;',
+                        ],
+                    ],
                 ]),
             ]);
             ?>
@@ -248,6 +281,10 @@ $this->title = 'Yii Debugger';
     .json-block {
         cursor: pointer;
         white-space: pre-wrap;
+    }
+
+    .json-block--truncated {
+        color: #6c757d;
     }
 </style>
 <script type="text/javascript">
@@ -273,8 +310,9 @@ $this->title = 'Yii Debugger';
             const params = new URLSearchParams(window.location.search);
 
             // cursor
-            params.set('cursorTime', String(cursor.time));
-            params.set('cursorTag', String(cursor.tag));
+            if (cursor && cursor.id) {
+                params.set('cursorId', String(cursor.id));
+            }
             params.set('limit', '50');
 
             // endpoint
@@ -344,16 +382,28 @@ $this->title = 'Yii Debugger';
             const selectedText = window.getSelection().toString();
             if (selectedText.length > 0) return;
 
+            const state = block.dataset.state || 'expanded';
+
             try {
-                const isMinified = (block.dataset.state || 'minified') === 'minified';
-                if (isMinified) {
-                    const obj = JSON.parse(block.textContent);
-                    block.dataset.original = block.textContent;
+                if (state === 'truncated') {
+                    const fullContent = block.dataset.full || block.textContent;
+                    block.textContent = fullContent;
+                    block.dataset.original = fullContent;
+                    block.dataset.state = 'expanded';
+                    block.classList.remove('json-block--truncated');
+                    block.removeAttribute('title');
+                    return;
+                }
+
+                if (state === 'expanded') {
+                    const content = block.dataset.original || block.textContent;
+                    const obj = JSON.parse(content);
+                    block.dataset.original = content;
                     block.textContent = JSON.stringify(obj, null, 2);
                     block.dataset.state = 'pretty';
-                } else {
+                } else if (state === 'pretty') {
                     block.textContent = block.dataset.original || block.textContent;
-                    block.dataset.state = 'minified';
+                    block.dataset.state = 'expanded';
                 }
             } catch (err) {}
         });

@@ -215,7 +215,12 @@ class DefaultController extends Controller
 
     public function actionToolbar($tag)
     {
-        $this->loadData($tag, 5);
+        $dataStorage = $this->module->getDataStorage();
+        if ($dataStorage instanceof MongoDataStorage) {
+            $this->loadDataDirect($tag, 5);
+        } else {
+            $this->loadData($tag, 5);
+        }
 
         return $this->renderPartial('@vendor/yiisoft/yii2-debug/src/views/default/toolbar', [
             'tag' => $tag,
@@ -258,7 +263,7 @@ class DefaultController extends Controller
             $manifest = $this->module->getDataStorage()->getDataManifest($retry > 0);
             if (isset($manifest[$tag])) {
                 $data=$this->module->getDataStorage()->getData($tag);
-                $exceptions = isset($data['exceptions']) ? $data['exceptions'] : [];
+                $exceptions = $data['exceptions'] ?? [];
                 foreach ($this->module->panels as $id => $panel) {
                     if (isset($data[$id])) {
                         $panel->tag = $tag;
@@ -321,10 +326,9 @@ class DefaultController extends Controller
         $limit = max(1, min(200, $limit));
 
         $cursor = null;
-        $cursorTime = Yii::$app->request->get('cursorTime');
-        $cursorTag  = Yii::$app->request->get('cursorTag');
-        if ($cursorTime !== null && $cursorTag !== null && $cursorTime !== '' && $cursorTag !== '') {
-            $cursor = ['time' => (int)$cursorTime, 'tag' => (string)$cursorTag];
+        $cursorId = Yii::$app->request->get('cursorId');
+        if ($cursorId !== null && $cursorId !== '') {
+            $cursor = ['id' => (string)$cursorId];
         }
 
         $page = $dataStorage->findIndexPage($filters, $limit, $cursor);
@@ -345,9 +349,10 @@ class DefaultController extends Controller
                 'ip' => $doc['ip'] ?? '',
                 'method' => $doc['method'] ?? '',
                 'statusCode' => $doc['statusCode'] ?? null,
-                'url' => $doc['requestUrl'] ?? ($summary['url'] ?? ''), // под вашу колонку url
+                'url' => $doc['requestUrl'] ?? ($summary['url'] ?? ''),
                 'processingTime' => $doc['processingTime'] ?? ($summary['processingTime'] ?? null),
                 'peakMemory' => $doc['peakMemory'] ?? ($summary['peakMemory'] ?? null),
+                'userId' => $doc['userId'] ?? ($summary['userId'] ?? null),
             ]);
         }
 
