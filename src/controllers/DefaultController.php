@@ -163,6 +163,9 @@ class DefaultController extends Controller
     {
         ini_set('memory_limit', '512M');
 
+        // Omitted panel query parameter is null; normalize it before using it as an array key (PHP 8.5+).
+        $panel = $panel ?? '';
+
         $dataStorage = $this->module->getDataStorage();
 
         if ($dataStorage instanceof MongoDataStorage) {

@@ -1,0 +1,42 @@
+# phpstorm project files
+.idea
+# vscode project files
+.vscode
+# cursor project files
+.cursor
+# kodik project files
+.kodik
+
+# netbeans project files
+nbproject
+
+# zend studio for eclipse project files
+.buildpath
+.project
+.settings
+
+# windows thumbnail cache
+Thumbs.db
+
+# composer vendor dir
+/vendor
+
+# composer itself is not needed
+composer.phar
+
+# Mac DS_Store Files
+.DS_Store
+
+# phpunit itself is not needed
+phpunit.phar
+# local phpunit config
+/phpunit.xml
+
+# docker files
+/startproj.sh
+/Dockerfile
+/codeception.yml
+/docker-compose.yml
+/dev-Dockerfile
+/.env
+/env-local.php
